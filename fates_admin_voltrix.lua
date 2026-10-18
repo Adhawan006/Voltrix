@@ -828,14 +828,45 @@ do
         return __NewIndex(...);
     end
 
-    local hookmetamethod = function(obj, metamethod, func)
-        local mt = getrawmetatable(obj);
-        setreadonly(mt, false);
-        local Old = hookfunction(mt[metamethod], func);
-        setreadonly(mt, true);
-        return Old
-    end
+   local hookmetamethod = function(obj, metamethod, func)
+    local mt = getrawmetatable(obj);
+    setreadonly(mt, false);
+    local Old = hookfunction(mt[metamethod], func);
+    setreadonly(mt, true);
+    return Old
+end
 
+
+    Hooks.Destroy = hookfunction(game.Destroy, function(...)
+        local instance = ...
+        local protected = table.find(ProtectedInstances, instance);
+        if (checkcaller() and protected) then
+            otherCheck(instance, -1);
+            local Parents = GetAllParents(instance);
+            for i, v in next, getconnections(Parents[1].ChildRemoved, true) do
+                v.Disable(v);
+            end
+            for i = 1, #Parents do
+                local Parent = Parents[i]
+                for i2, v in next, getconnections(Parent.DescendantRemoving, true) do
+                    v.Disable(v);
+                end
+            end
+            local destroy = Hooks.Destroy(...);
+            for i = 1, #Parents do
+                local Parent = Parents[i]
+                for i2, v in next, getconnections(Parent.DescendantRemoving, true) do
+                    v.Enable(v);
+                end
+            end
+            for i, v in next, getconnections(Parents[1].ChildRemoved, true) do
+                v.Enable(v);
+            end
+            table.remove(ProtectedInstances, protected);
+            return destroy;
+        end
+        return Hooks.Destroy(...);
+    end);
 end
 
 Hooks.OldGetChildren = hookfunction(game.GetChildren, newcclosure(function(...)
@@ -8441,324 +8472,6 @@ getgenv().F_A = {
     PluginLibrary = PluginLibrary,
     GetConfig = GetConfig
 }
-
--- VOLTRIX MENU START
-task.spawn(function()
--- Voltrix menu for fates admin (built in, runs after fates admin loads)
-local F = getgenv().F_A
-if not F then return warn("load fates admin first") end
-local LP = game:GetService("Players").LocalPlayer
-local UIS = game:GetService("UserInputService")
-local run = F.PluginLibrary.ExecuteCommand
-local function cmd(name, ...) pcall(run, name, {...}, LP) end
-local function cmdText(name, text)
-    local args = {}
-    for w in string.gmatch(text or "", "%S+") do args[#args + 1] = w end
-    pcall(run, name, args, LP)
-end
-
-local BG, PANEL, NEON, TEXT = Color3.fromRGB(18,10,50), Color3.fromRGB(45,25,105), Color3.fromRGB(70,90,255), Color3.fromRGB(235,235,255)
-
-local root = gethui and gethui() or game:GetService("CoreGui")
-local old = root:FindFirstChild("VoltrixMenu")
-if old then old:Destroy() end
-local gui = Instance.new("ScreenGui")
-gui.Name, gui.ResetOnSpawn = "VoltrixMenu", false
-gui.Parent = root
-
-local function new(class, props, parent)
-    local o = Instance.new(class)
-    for k, v in next, props do o[k] = v end
-    o.Parent = parent
-    return o
-end
-local function stroke(o, c, t) new("UIStroke", {Color = c or NEON, Thickness = t or 2}, o) end
-local function corner(o, r) new("UICorner", {CornerRadius = UDim.new(0, r or 4)}, o) end
-
-local main = new("Frame", {Size = UDim2.fromOffset(620, 430), Position = UDim2.new(0.5, -310, 0.5, -215), BackgroundColor3 = BG, BackgroundTransparency = 0.05, Active = true}, gui)
-stroke(main); corner(main, 6)
-
-do
-    local dragging, start, startPos
-    main.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 and i.Position.Y - main.AbsolutePosition.Y < 30 then
-            dragging, start, startPos = true, i.Position, main.Position
-        end
-    end)
-    UIS.InputChanged:Connect(function(i)
-        if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-            local d = i.Position - start
-            main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-        end
-    end)
-    UIS.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
-end
-
-local side = new("Frame", {Size = UDim2.new(0, 140, 1, -16), Position = UDim2.fromOffset(8, 8), BackgroundColor3 = PANEL, BackgroundTransparency = 0.3}, main)
-stroke(side, NEON, 1); corner(side)
-local logo = new("TextLabel", {Size = UDim2.new(1, 0, 0, 50), BackgroundTransparency = 1, Text = "VOLTRIX", Font = Enum.Font.GothamBlack, TextSize = 24, TextColor3 = NEON}, side)
-stroke(logo, NEON, 1)
-local tabs = new("Frame", {Size = UDim2.new(1, -10, 1, -60), Position = UDim2.fromOffset(5, 55), BackgroundTransparency = 1}, side)
-new("UIListLayout", {Padding = UDim.new(0, 3)}, tabs)
-
-local content = new("Frame", {Size = UDim2.new(1, -164, 1, -16), Position = UDim2.fromOffset(156, 8), BackgroundColor3 = PANEL, BackgroundTransparency = 0.4}, main)
-stroke(content, NEON, 1); corner(content)
-
-local pages, tabButtons = {}, {}
-local function showPage(name)
-    for n, p in next, pages do p.Visible = (n == name) end
-    for n, b in next, tabButtons do b.TextColor3 = (n == name) and NEON or TEXT end
-end
-local function page(name)
-    local p = new("ScrollingFrame", {Size = UDim2.new(1, -16, 1, -16), Position = UDim2.fromOffset(8, 8), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = NEON, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Visible = false}, content)
-    new("UIListLayout", {Padding = UDim.new(0, 5)}, p)
-    pages[name] = p
-    local b = new("TextButton", {Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, Text = name, Font = Enum.Font.GothamMedium, TextSize = 14, TextColor3 = TEXT}, tabs)
-    b.MouseButton1Click:Connect(function() showPage(name) end)
-    tabButtons[name] = b
-    return p
-end
-
-local function row(p, h) local r = new("Frame", {Size = UDim2.new(1, -6, 0, h or 28), BackgroundColor3 = BG, BackgroundTransparency = 0.3}, p); corner(r); return r end
-local function label(r, t, w) return new("TextLabel", {Size = w or UDim2.new(1, -60, 1, 0), Position = UDim2.fromOffset(8, 0), BackgroundTransparency = 1, Text = t, Font = Enum.Font.Gotham, TextSize = 13, TextColor3 = TEXT, TextXAlignment = Enum.TextXAlignment.Left}, r) end
-local function smallButton(parent, text, pos, size, fn)
-    local b = new("TextButton", {Position = pos, Size = size, BackgroundColor3 = PANEL, Text = text, Font = Enum.Font.GothamMedium, TextSize = 12, TextColor3 = TEXT}, parent)
-    stroke(b, NEON, 1); corner(b, 3)
-    b.MouseButton1Click:Connect(fn)
-    return b
-end
-
-local function toggle(p, text, on, off)
-    local r = row(p); label(r, text)
-    local box = new("TextButton", {Size = UDim2.fromOffset(18, 18), Position = UDim2.new(1, -26, 0.5, -9), BackgroundColor3 = PANEL, Text = "", AutoButtonColor = false}, r)
-    stroke(box, NEON, 1); corner(box, 3)
-    local state = false
-    box.MouseButton1Click:Connect(function()
-        state = not state
-        box.BackgroundColor3 = state and NEON or PANEL
-        cmd(state and on or off)
-    end)
-end
-
-local function slider(p, text, min, max, default, name)
-    local r = row(p, 40)
-    local l = label(r, text .. ": " .. default, UDim2.new(1, -16, 0, 18))
-    local bar = new("Frame", {Size = UDim2.new(1, -20, 0, 8), Position = UDim2.new(0, 10, 0, 26), BackgroundColor3 = PANEL}, r); corner(bar, 4)
-    local fill = new("Frame", {Size = UDim2.new((default - min) / (max - min), 0, 1, 0), BackgroundColor3 = NEON}, bar); corner(fill, 4)
-    local drag = false
-    local function set(x)
-        local a = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-        local v = math.floor(min + (max - min) * a + 0.5)
-        fill.Size = UDim2.new(a, 0, 1, 0); l.Text = text .. ": " .. v
-        cmd(name, tostring(v))
-    end
-    bar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = true; set(i.Position.X) end end)
-    UIS.InputChanged:Connect(function(i) if drag and i.UserInputType == Enum.UserInputType.MouseMovement then set(i.Position.X) end end)
-    UIS.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end end)
-end
-
-local function button(p, text, name, ...)
-    local args = {...}
-    local b = new("TextButton", {Size = UDim2.new(1, -6, 0, 28), BackgroundColor3 = PANEL, Text = text, Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = TEXT}, p)
-    stroke(b, NEON, 1); corner(b)
-    b.MouseButton1Click:Connect(function() if type(name) == "function" then name() else cmd(name, unpack(args)) end end)
-end
-
-local function input(p, text, name, placeholder)
-    local r = row(p); label(r, text, UDim2.new(0.38, 0, 1, 0))
-    local box = new("TextBox", {Position = UDim2.new(0.38, 0, 0.5, -11), Size = UDim2.new(0.38, 0, 0, 22), BackgroundColor3 = PANEL, Text = "", PlaceholderText = placeholder or "value", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TEXT, PlaceholderColor3 = Color3.fromRGB(150, 150, 190), ClearTextOnFocus = false}, r)
-    corner(box, 3)
-    smallButton(r, "Run", UDim2.new(0.78, 4, 0.5, -11), UDim2.new(0.22, -12, 0, 22), function() cmdText(name, box.Text) end)
-end
-
-local function build(p, items)
-    for _, it in ipairs(items) do
-        local t = it[1]
-        if t == "T" then toggle(p, it[2], it[3], it[4])
-        elseif t == "S" then slider(p, it[2], it[3], it[4], it[5], it[6])
-        elseif t == "B" then button(p, it[2], it[3], it[4], it[5])
-        elseif t == "I" then input(p, it[2], it[3], it[4]) end
-    end
-end
-
------------------------------------------------------------------ pages
-local selfP = page("Self")
-build(selfP, {
-    {"T", "Noclip", "noclip", "clip"},
-    {"T", "Infinite Jump", "infinitejump", "noinfinitejump"},
-    {"T", "Invisible", "invisible", "uninvisible"},
-    {"T", "Spin", "spin", "unspin"},
-    {"T", "Freeze", "freeze", "unfreeze"},
-    {"T", "Swim", "swim", "unswim"},
-    {"T", "Disable Being Sat", "disablesit", "enablesit"},
-    {"T", "Hide Name Tag", "hidename", "showname"},
-    {"T", "Disable Animations", "disableanims", "enableanims"},
-    {"T", "Blink (CFrame Speed)", "blink", "unblink"},
-    {"S", "Walk Speed", 16, 150, 16, "walkspeed"},
-    {"S", "Jump Power", 50, 200, 50, "jumppower"},
-    {"S", "Hip Height", 0, 30, 0, "hipheight"},
-    {"I", "Play Animation", "anim", "animation id"},
-    {"B", "No Jump Cooldown", "nojumpcooldown"},
-    {"B", "Respawn", "respawn"},
-    {"B", "Reset", "reset"},
-    {"B", "Refresh (respawn in place)", "refresh"},
-    {"B", "Sit", "sit"},
-    {"B", "Set Spawn Here", "setspawn"},
-    {"B", "Remove Spawn", "removespawn"},
-    {"B", "Switch Team", "switchteam"},
-    {"B", "Anti AFK", "antiafk"},
-    {"B", "Anti Kick", "antikick"},
-    {"B", "Anti Teleport", "antiteleport"},
-    {"B", "Auto Rejoin", "autorejoin"},
-    {"B", "Anti Attach", "antiattach"},
-    {"B", "Anti TKill", "antitkill"},
-})
-
-local moveP = page("Movement")
-build(moveP, {
-    {"T", "Fly", "fly", "unfly"},
-    {"T", "Fly (variant 2)", "fly2", "unfly"},
-    {"T", "Float", "float", "unfloat"},
-    {"S", "Fly Speed", 1, 20, 1, "flyspeed"},
-    {"S", "Gravity", 0, 196, 196, "gravity"},
-    {"B", "No Gravity", "nogravity"},
-    {"B", "Click Teleport", "clicktp"},
-    {"B", "Freecam (toggle)", "freecam"},
-    {"I", "Freecam Go To", "freecamgoto", "player"},
-    {"B", "Rejoin and TP Back", "rejoinre"},
-})
-
-local visP = page("Visual")
-build(visP, {
-    {"S", "Field of View", 40, 120, 70, "fov"},
-    {"T", "ESP", "esp", "unesp"},
-    {"T", "Fullbright", "fullbright", "nofullbright"},
-    {"T", "X-Ray", "xray", "noxray"},
-    {"T", "True Sight", "truesight", "notruesight"},
-    {"T", "True Sight GUIs", "truesightguis", "notruesightguis"},
-    {"T", "Remove Lights", "nolights", "revertnolights"},
-    {"T", "Plastic Material", "plastic", "unplastic"},
-    {"T", "Inviscam", "inviscam", "uninviscam"},
-    {"T", "Streamer Mode", "streamermode", "nostreamermode"},
-    {"B", "Crosshair", "crosshair"},
-    {"B", "Shiftlock", "shiftlock"},
-    {"B", "Time: Day", "time", "day"},
-    {"B", "Time: Night", "time", "night"},
-    {"B", "Time: Dawn", "time", "dawn"},
-    {"B", "Display Names On", "displaynames", "on"},
-    {"B", "Display Names Off", "displaynames", "off"},
-    {"I", "Zoom Distance", "setzoomdistance", "number"},
-})
-
--- Players (target box shared by all rows)
-local plP = page("Players")
-local target
-do
-    local r = row(plP); label(r, "Target", UDim2.new(0.25, 0, 1, 0))
-    target = new("TextBox", {Position = UDim2.new(0.25, 0, 0.5, -11), Size = UDim2.new(0.73, -8, 0, 22), BackgroundColor3 = PANEL, Text = "", PlaceholderText = "player name", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TEXT, PlaceholderColor3 = Color3.fromRGB(150, 150, 190), ClearTextOnFocus = false}, r)
-    corner(target, 3)
-end
-local function playerRow(text, on, off)
-    local r = row(plP); label(r, text, UDim2.new(0.5, 0, 1, 0))
-    local hasOff = off ~= nil
-    smallButton(r, "On", UDim2.new(hasOff and 0.5 or 0.72, 0, 0.5, -11), UDim2.new(hasOff and 0.22 or 0.28, -6, 0, 22), function() cmdText(on, target.Text) end)
-    if hasOff then smallButton(r, "Off", UDim2.new(0.74, 0, 0.5, -11), UDim2.new(0.26, -8, 0, 22), function() cmdText(off, target.Text) end) end
-end
-playerRow("Go To", "goto")
-playerRow("Tween To", "tweento")
-playerRow("Loop Go To", "loopgoto", "unloopgoto")
-playerRow("View / Spectate", "view", "unview")
-playerRow("Follow", "follow", "unfollow")
-playerRow("Walk To", "walkto")
-playerRow("Pathfind To", "pathfind")
-playerRow("Orbit", "orbit", "unorbit")
-playerRow("Head Sit", "headsit", "unheadsit")
-playerRow("Head Stand", "headstand", "unheadstand")
-playerRow("Trace", "trace", "untrace")
-playerRow("Chat Mute", "chatmute", "unchatmute")
-playerRow("Friend", "friend", "unfriend")
-playerRow("Copy Name", "copyname")
-playerRow("Copy User ID", "copyid")
-playerRow("Show Position", "position")
-playerRow("Audio Log", "audiolog")
-playerRow("Give Tool(s)", "givetools")
-playerRow("Exception List", "exceptions", "noexception")
-button(plP, "Clear Exceptions", "clearexceptions")
-
-local toolP = page("Tools")
-build(toolP, {
-    {"T", "Sword Aura", "swordaura", "noswordaura"},
-    {"T", "Auto Grab Tools", "autograbtools", "unautograbtools"},
-    {"I", "Sword Reach", "reach", "size"},
-    {"B", "Remove Reach", "noreach"},
-    {"I", "Grip Position", "grippos", "x y z"},
-    {"B", "BTools", "btools"},
-    {"B", "Grab Tools", "grabtools"},
-    {"B", "Save Tools", "savetools"},
-    {"B", "Equip Tools", "equiptools"},
-    {"B", "Activate Tools", "activatetools"},
-    {"B", "Drop Tools", "droptools"},
-    {"B", "Delete Equipped Tool", "deletetool"},
-    {"B", "Delete All Tools", "deletetools"},
-    {"B", "Remove My Hats", "nohats"},
-    {"B", "Clear Hats in Workspace", "clearhats"},
-    {"B", "Fire Click Detectors", "fireclickdetectors"},
-    {"B", "Fire Touch Interests", "firetouchinterests"},
-    {"B", "Fire Proximity Prompts", "fireproximityprompts"},
-})
-
-local chatP = page("Chat")
-build(chatP, {
-    {"I", "Send Chat", "chat", "message"},
-    {"I", "Silent Chat", "silentchat", "message"},
-    {"B", "Chat Logs", "chatlogs"},
-    {"B", "Global Chat Logs", "globalchatlogs"},
-    {"B", "HTTP Logs", "httplogs"},
-    {"B", "Console Output", "console"},
-    {"I", "Game Volume", "volume", "0 to 10"},
-    {"I", "Audio Time Position", "audiotime", "seconds"},
-    {"B", "No Purchase Prompts", "nosales"},
-    {"B", "Stop Force Play", "unforceplay"},
-})
-
-local srvP = page("Server")
-build(srvP, {
-    {"B", "Rejoin", "rejoin"},
-    {"B", "Server Hop (max players)", "serverhop", "max"},
-    {"B", "Server Hop (min players)", "serverhop", "min"},
-    {"B", "Ping", "ping"},
-    {"B", "FPS", "fps"},
-    {"B", "Memory", "memory"},
-    {"B", "Command Count", "commandcount"},
-})
-
-local setP = page("Settings")
-build(setP, {
-    {"I", "Set Prefix", "setprefix", "key"},
-    {"B", "Save Prefix", "saveprefix"},
-    {"B", "Command Line", "commandline"},
-    {"B", "Wide Command Bar", "widebar"},
-    {"B", "Draggable Command Bar", "draggablebar"},
-    {"B", "Chat Prediction", "chatprediction"},
-    {"B", "Show All Commands", "commands"},
-    {"B", "Fates Admin Config", "config"},
-    {"B", "Changelogs", "changelogs"},
-    {"B", "Repeat Last Command", "lastcommand"},
-    {"I", "Command Help", "help", "command name"},
-    {"B", "Reload Fates Admin", "reloadscript"},
-    {"B", "Kill Fates Admin", "killscript"},
-    {"B", "Hide Menu (RightShift)", function() main.Visible = false end},
-    {"B", "Destroy Menu", function() gui:Destroy() end},
-})
-
-UIS.InputBegan:Connect(function(i, gp)
-    if not gp and i.KeyCode == Enum.KeyCode.RightShift then main.Visible = not main.Visible end
-end)
-showPage("Self")
-
-end)
--- VOLTRIX MENU END
-
 
 Utils.Notify(LocalPlayer, "Loaded", format("script loaded in %.3f seconds", (tick()) - _L.start));
 Utils.Notify(LocalPlayer, "Welcome", "'cmds' to see all of the commands, 'config' to customise the script");
